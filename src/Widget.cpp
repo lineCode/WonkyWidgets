@@ -30,7 +30,7 @@ Widget::Widget() noexcept :
 
 	mContext(nullptr)
 {
-	mFlags.ownedByParent = false;
+	mFlags.owner = OWNER_EXTERNAL;
 	mFlags.childNeedsRelayout = false;
 	mFlags.needsRelayout = true;
 	mFlags.focused = false;
@@ -84,7 +84,7 @@ Widget& Widget::operator=(Widget&& other) noexcept {
 	}
 	mContext = other.mContext; other.mContext = nullptr;
 	mFlags   = other.mFlags;
-	other.mFlags.ownedByParent = false;
+	// other.mFlags.owner = false;
 	other.mFlags.childNeedsRelayout = false;
 	other.mFlags.needsRelayout = true;
 	other.mFlags.focused = false;
@@ -167,7 +167,7 @@ void Widget::add(std::initializer_list<Widget*> ptrs) {
 
 Widget* Widget::add(std::unique_ptr<Widget>&& w) {
 	add(w.get());
-	w->mFlags.ownedByParent = true;
+	w->mFlags.owner = OWNER_PARENT;
 	return w.release();
 }
 
@@ -279,16 +279,18 @@ std::unique_ptr<Widget> Widget::removeQuiet() {
 }
 
 std::unique_ptr<Widget> Widget::acquireOwnership() noexcept {
-	if(!mFlags.ownedByParent)
+	if(mFlags.owner == OWNER_EXTERNAL)
 		return nullptr;
-	mFlags.ownedByParent = false;
+	mFlags.owner = OWNER_EXTERNAL;
 	return std::unique_ptr<Widget>(this);
 }
 
-void Widget::giveOwnershipToParent() {
-	if(mFlags.ownedByParent) throw std::runtime_error("Already owned by parent");
-	if(!parent()) throw std::runtime_error("No parent to give the ownership to");
-	mFlags.ownedByParent = true;
+Widget*   Widget::owner(OwnerType type) noexcept {
+	mFlags.owner = type;
+	return this;
+}
+OwnerType Widget::owner() const noexcept {
+	return (OwnerType)mFlags.owner;
 }
 
 template<>
@@ -556,8 +558,14 @@ void Widget::getAttributes(wwidget::AttributeCollectorInterface& collector) {
 			ss << this;
 			collector("ptr", ss.str(), "");
 		}
-		if(mFlags.ownedByParent)
-			collector("owned by parent", mFlags.ownedByParent, false);
+		if(mFlags.owner != OWNER_EXTERNAL) {
+			switch(owner()) {
+				case OWNER_EXTERNAL: collector("owner", "external", false); break;
+				case OWNER_PARENT:   collector("owner", "parent", false); break;
+				case OWNER_GC1:      collector("owner", "gc1", false); break;
+				case OWNER_GC2:      collector("owner", "gc2", false); break;
+			}
+		}
 		if(mFlags.childNeedsRelayout)
 			collector("child needs relayout", mFlags.childNeedsRelayout, false);
 		if(mFlags.needsRelayout)

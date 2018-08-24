@@ -28,6 +28,13 @@ class Font;
 class Image;
 class Context;
 
+enum OwnerType {
+	OWNER_EXTERNAL,
+	OWNER_PARENT,
+	OWNER_GC1,
+	OWNER_GC2
+};
+
 /**
  * Widget is the base class of all widget windows etc.
  * The Ui is build as a tree of widgets, where the children of each widget are stored as a linked list.
@@ -54,7 +61,7 @@ private:
 
 	struct {
 		uint32_t
-			ownedByParent : 1,
+			owner : 2,
 			childNeedsRelayout : 1,
 			needsRelayout : 1,
 			focused : 1,
@@ -165,8 +172,9 @@ public:
 
 	/// If the widet has the FlagOwnedByParent it unsets the flag and returns a unique_ptr to this widget
 	std::unique_ptr<Widget> acquireOwnership() noexcept;
-	/// Transfers the ownership of this widget to its parent. Throws when the parent already has ownership or the widget has no parent.
-	void                    giveOwnershipToParent();
+	/// Sets ownership
+	Widget*   owner(OwnerType type) noexcept;
+	OwnerType owner() const noexcept;
 
 	/// Calls remove() on all children. @see remove()
 	void clearChildren();
@@ -329,7 +337,6 @@ public:
 
 	Offset absoluteOffset(Widget const* relativeToParent = nullptr);
 
-	inline bool ownedByParent() const noexcept { return mFlags.ownedByParent; }
 	inline bool needsRelayout() const noexcept { return mFlags.needsRelayout; }
 	inline bool childNeedsRelayout() const noexcept { return mFlags.childNeedsRelayout; }
 	inline bool focused() const noexcept { return mFlags.focused; }
